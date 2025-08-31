@@ -4,3 +4,57 @@
 !_TAG_PROGRAM_NAME	Exuberant Ctags	//
 !_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
 !_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+ASM_OBJS	Makefile	/^ASM_OBJS := $(ASM_SRCS:.asm=.o)$/;"	m
+ASM_SRCS	Makefile	/^ASM_SRCS := boot.asm$/;"	m
+CONSOLE_H	Console.h	2;"	d
+CPP_OBJS	Makefile	/^CPP_OBJS := $(CPP_SRCS:.cpp=.o)$/;"	m
+CPP_SRCS	Makefile	/^CPP_SRCS := kernel.cpp Keyboard.cpp Console.cpp$/;"	m
+CXX	Makefile	/^CXX  := g++$/;"	m
+CXXFLAGS	Makefile	/^CXXFLAGS := -m32 -ffreestanding -O2 -Wall -Wextra \\$/;"	m
+Console	Console.h	/^class Console {$/;"	c
+KEYBOARD_DATA_PORT	Keyboard.cpp	5;"	d	file:
+KEYBOARD_H	Keyboard.h	3;"	d
+LDFLAGS	Makefile	/^LDFLAGS := -static -nostdlib -nostartfiles$/;"	m
+MAXLEN	Console.h	/^    static const int MAXLEN = 256;$/;"	m	class:Console
+NASM	Makefile	/^NASM := nasm$/;"	m
+PIC1_COMMAND	Keyboard.cpp	6;"	d	file:
+PIC_EOI	Keyboard.cpp	7;"	d	file:
+VGA_ADDRESS	Console.cpp	5;"	d	file:
+VGA_HEIGHT	Console.h	/^    static const uint16_t VGA_HEIGHT = 25;$/;"	m	class:Console
+VGA_WIDTH	Console.h	/^    static const uint16_t VGA_WIDTH  = 80;$/;"	m	class:Console
+_start	boot.asm	/^_start:$/;"	l
+clearScreen	Console.cpp	/^void Console::clearScreen() {$/;"	f	class:Console
+color	Console.cpp	/^uint8_t   Console::color        = 0x07;$/;"	m	class:Console	file:
+color	Console.h	/^    static uint8_t  color;$/;"	m	class:Console
+cursorPos	Console.cpp	/^uint16_t  Console::cursorPos    = 0;$/;"	m	class:Console	file:
+cursorPos	Console.h	/^    static uint16_t cursorPos;$/;"	m	class:Console
+efault	Makefile	/^	echo 'set default=0'                        >> isodir\/boot\/grub\/grub.cfg$/;"	m
+getKey	Keyboard.cpp	/^int getKey() {$/;"	f
+head	Keyboard.cpp	/^static volatile int head = 0;$/;"	v	file:
+imeout	Makefile	/^	echo 'set timeout=0'                         > isodir\/boot\/grub\/grub.cfg$/;"	m
+inb	Keyboard.cpp	/^static inline uint8_t inb(uint16_t port) {$/;"	f	file:
+keyBuffer	Keyboard.cpp	/^static volatile int keyBuffer[256];$/;"	v	file:
+keyboard_handler	Keyboard.cpp	/^extern "C" void keyboard_handler() {$/;"	f
+keyboard_install	Keyboard.cpp	/^void keyboard_install() {$/;"	f
+kmain	kernel.cpp	/^extern "C" void kmain() {$/;"	f
+lineBuffer	Console.cpp	/^char      Console::lineBuffer[] = {0};$/;"	m	class:Console	file:
+lineBuffer	Console.h	/^    static char lineBuffer[MAXLEN];$/;"	m	class:Console
+outb	Keyboard.cpp	/^static inline void outb(uint16_t port, uint8_t val) {$/;"	f	file:
+putChar	Console.cpp	/^void Console::putChar(char c) {$/;"	f	class:Console
+readLine	Console.cpp	/^char* Console::readLine() {$/;"	f	class:Console
+scancodeMap	Keyboard.cpp	/^static const char scancodeMap[128] = {$/;"	v	file:
+scancodeMapShift	Keyboard.cpp	/^static const char scancodeMapShift[128] = {$/;"	v	file:
+scancodeToAscii	Keyboard.cpp	/^char scancodeToAscii(uint8_t sc) {$/;"	f
+scroll	Console.cpp	/^void Console::scroll() {$/;"	f	class:Console
+section	boot.asm	/^section .bss$/;"	l
+section	boot.asm	/^section .multiboot$/;"	l
+section	boot.asm	/^section .text$/;"	l
+setColor	Console.cpp	/^void Console::setColor(uint8_t newColor) {$/;"	f	class:Console
+shiftDown	Keyboard.cpp	/^static bool shiftDown = false;$/;"	v	file:
+stack_bottom	boot.asm	/^stack_bottom:$/;"	l
+stack_top	boot.asm	/^stack_top:$/;"	l
+tail	Keyboard.cpp	/^static volatile int tail = 0;$/;"	v	file:
+updateCursor	Console.cpp	/^void Console::updateCursor() {$/;"	f	class:Console
+vgaBuffer	Console.cpp	/^uint16_t* Console::vgaBuffer    = (uint16_t*)VGA_ADDRESS;$/;"	m	class:Console	file:
+vgaBuffer	Console.h	/^    static uint16_t* vgaBuffer;$/;"	m	class:Console
+write	Console.cpp	/^void Console::write(const char* str) {$/;"	f	class:Console
