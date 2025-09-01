@@ -1,57 +1,53 @@
 # Herramientas
-NASM := nasm
-CXX  := g++
+NASM = nasm
+CC   = gcc
+LD   = ld
 
 # Flags de compilación
-CXXFLAGS := -m32 -ffreestanding -O2 -Wall -Wextra \
-            -fno-exceptions -fno-rtti -fno-pie -fno-pic \
-            -std=gnu++17
+CFLAGS = -ffreestanding -O2 -Wall -Wextra -m64 -fno-pic -fno-stack-protector -nostdlib -nostdinc
+ASFLAGS = -f elf64
 
-# Flags de link
-LDFLAGS := -static -nostdlib -nostartfiles
+# Objetos
+OBJS = boot.o kernel.o console.o keyboard.o
+
+# Nombre del kernel
+KERNEL = kernel.elf
 
 .PHONY: all clean iso run
 
-# Objetivos
-ASM_SRCS := boot.asm
-CPP_SRCS := kernel.cpp Keyboard.cpp Console.cpp
+all: $(KERNEL)
 
-ASM_OBJS := $(ASM_SRCS:.asm=.o)
-CPP_OBJS := $(CPP_SRCS:.cpp=.o)
+# Ensamblador (boot.asm)
+boot.o: boot.asm
+	$(NASM) $(ASFLAGS) $< -o $@
 
-all: iso
+# C (kernel, console, keyboard)
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# 1) Ensamblar boot.S
-%.o: %.asm
-	$(NASM) -f elf32 $< -o $@
+# Enlace
+$(KERNEL): $(OBJS) linker.ld
+	$(LD) -n -o $@ -T linker.ld $(OBJS)
 
-# 2) Compilar C++
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# 3) Linkear todo en un ELF
-kernel.elf: $(ASM_OBJS) $(CPP_OBJS) linker.ld
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -T linker.ld \
-		-o $@ $(ASM_OBJS) $(CPP_OBJS)	
-
-# 4) ISO de arranque (usamos el ELF directamente)
-iso: kernel.elf
+# Crear ISO con GRUB2
+iso: $(KERNEL)
 	mkdir -p isodir/boot/grub
-	cp kernel.elf isodir/boot/kernel.elf
-	echo 'set timeout=0'                         > isodir/boot/grub/grub.cfg
-	echo 'set default=0'                        >> isodir/boot/grub/grub.cfg
-	echo ''                                     >> isodir/boot/grub/grub.cfg
-	echo 'menuentry "ducknel" {'                >> isodir/boot/grub/grub.cfg
-	echo '  multiboot /boot/kernel.elf'         >> isodir/boot/grub/grub.cfg
-	echo '  boot'                               >> isodir/boot/grub/grub.cfg
-	echo '}'                                    >> isodir/boot/grub/grub.cfg
-	grub-mkrescue -o miOS.iso isodir
+	cp $(KERNEL) isodir/boot/kernel.elf
+	echo 'set timeout=0'                > isodir/boot/grub/grub.cfg
+	echo 'set default=0'               >> isodir/boot/grub/grub.cfg
+	echo ''                            >> isodir/boot/grub/grub.cfg
+	echo 'menuentry "ducknel (64-bit)" {' >> isodir/boot/grub/grub.cfg
+	echo '  multiboot2 /boot/kernel.elf' >> isodir/boot/grub/grub.cfg
+	echo '}'                           >> isodir/boot/grub/grub.cfg
+	grub-mkrescue -o ducknel.iso isodir
 	rm -rf isodir
 
+# Ejecutar en QEMU
 run: iso
-	qemu-system-i386 -cdrom miOS.iso -m 512M -curses
+	qemu-system-x86_64 -cdrom ducknel.iso -serial stdio -m 512M
 
+# Limpiar
 clean:
-	rm -f *.o *.elf *.iso
+	rm -f *.o $(KERNEL) ducknel.iso
 	rm -rf isodir
 

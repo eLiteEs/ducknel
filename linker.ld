@@ -1,12 +1,14 @@
 ENTRY(_start)
+OUTPUT_FORMAT("elf64-x86-64")
 
 SECTIONS
 {
     . = 1M;
 
-    .multiboot :
+    /* Multiboot2 header debe ir dentro de los primeros 8 KiB */
+    .multiboot2_header :
     {
-        KEEP(*(.multiboot))
+        KEEP(*(.multiboot2_header))
     }
 
     .text :
