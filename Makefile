@@ -1,53 +1,71 @@
 # Herramientas
-NASM = nasm
-CC   = gcc
-LD   = ld
+AS      := nasm
+CC      := gcc
+LD      := ld
 
-# Flags de compilación
-CFLAGS = -ffreestanding -O2 -Wall -Wextra -m64 -fno-pic -fno-stack-protector -nostdlib -nostdinc
-ASFLAGS = -f elf64
+# Flags
+CFLAGS  := -ffreestanding -O2 -Wall -Wextra -m64 \
+           -fno-stack-protector -fno-pic -nostdlib \
+           -Iinclude -Idrivers -Ikernel
 
-# Objetos
-OBJS = boot.o kernel.o console.o keyboard.o
+ASFLAGS := -f elf64
 
-# Nombre del kernel
-KERNEL = kernel.elf
+# Carpetas
+OUT_DIR := out
+ISO_DIR := target
 
-.PHONY: all clean iso run
+# Archivos
+OBJS = $(OUT_DIR)/boot.o \
+       $(OUT_DIR)/kernel.o \
+       $(OUT_DIR)/console.o \
+       $(OUT_DIR)/keyboard.o
 
-all: $(KERNEL)
+KERNEL = $(OUT_DIR)/kernel.elf
+ISO    = $(ISO_DIR)/kernel.iso
 
-# Ensamblador (boot.asm)
-boot.o: boot.asm
-	$(NASM) $(ASFLAGS) $< -o $@
+# Regla principal
+all: $(ISO)
 
-# C (kernel, console, keyboard)
-%.o: %.c
+# Compilar ASM
+$(OUT_DIR)/%.o: boot/%.asm | $(OUT_DIR)
+	$(AS) $(ASFLAGS) $< -o $@
+
+# Compilar C
+$(OUT_DIR)/%.o: kernel/%.c | $(OUT_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Enlace
-$(KERNEL): $(OBJS) linker.ld
-	$(LD) -n -o $@ -T linker.ld $(OBJS)
+$(OUT_DIR)/%.o: drivers/%.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# Crear ISO con GRUB2
-iso: $(KERNEL)
-	mkdir -p isodir/boot/grub
-	cp $(KERNEL) isodir/boot/kernel.elf
-	echo 'set timeout=0'                > isodir/boot/grub/grub.cfg
-	echo 'set default=0'               >> isodir/boot/grub/grub.cfg
-	echo ''                            >> isodir/boot/grub/grub.cfg
-	echo 'menuentry "ducknel (64-bit)" {' >> isodir/boot/grub/grub.cfg
-	echo '  multiboot2 /boot/kernel.elf' >> isodir/boot/grub/grub.cfg
-	echo '}'                           >> isodir/boot/grub/grub.cfg
-	grub-mkrescue -o ducknel.iso isodir
-	rm -rf isodir
+# Enlazar kernel
+$(KERNEL): $(OBJS) kernel/linker.ld | $(OUT_DIR)
+	$(LD) -n -o $@ -T kernel/linker.ld $(OBJS)
+
+# Generar ISO
+$(ISO): $(KERNEL) | $(ISO_DIR)
+	mkdir -p $(ISO_DIR)/iso/boot/grub
+	cp $(KERNEL) $(ISO_DIR)/iso/boot/kernel.elf
+	echo 'set timeout=0'                         >  $(ISO_DIR)/iso/boot/grub/grub.cfg
+	echo 'set default=0'                        >> $(ISO_DIR)/iso/boot/grub/grub.cfg
+	echo ''                                     >> $(ISO_DIR)/iso/boot/grub/grub.cfg
+	echo 'menuentry "ducknel" {'                >> $(ISO_DIR)/iso/boot/grub/grub.cfg
+	echo '  multiboot2 /boot/kernel.elf'        >> $(ISO_DIR)/iso/boot/grub/grub.cfg
+	echo '}'                                    >> $(ISO_DIR)/iso/boot/grub/grub.cfg
+	grub-mkrescue -o $(ISO) $(ISO_DIR)/iso
+	rm -rf $(ISO_DIR)/iso
 
 # Ejecutar en QEMU
-run: iso
-	qemu-system-x86_64 -cdrom ducknel.iso -serial stdio -m 512M
+run: $(ISO)
+	qemu-system-x86_64 -cdrom $(ISO) -serial stdio -m 512M
+
+# Crear directorios
+$(OUT_DIR):
+	mkdir -p $(OUT_DIR)
+
+$(ISO_DIR):
+	mkdir -p $(ISO_DIR)
 
 # Limpiar
 clean:
-	rm -f *.o $(KERNEL) ducknel.iso
-	rm -rf isodir
+	rm -rf $(OUT_DIR) $(ISO_DIR)
 
