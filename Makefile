@@ -4,7 +4,7 @@ CC      := gcc
 LD      := ld
 
 # Flags
-CFLAGS  := -ffreestanding -O2 -Wall -Wextra -m64 \
+CFLAGS  := -ffreestanding -O2 -Wall -Wextra -m64 -g -O0 \
            -fno-stack-protector -fno-pic -nostdlib \
            -Iinclude -Idrivers -Ikernel
 
@@ -57,6 +57,9 @@ $(ISO): $(KERNEL) | $(ISO_DIR)
 # Ejecutar en QEMU
 run: $(ISO)
 	qemu-system-x86_64 -cdrom $(ISO) -serial stdio -m 512M
+
+debug: $(ISO)
+	qemu-system-x86_64 -cdrom $(ISO) -serial stdio -m 512M -s -S
 
 # Crear directorios
 $(OUT_DIR):
