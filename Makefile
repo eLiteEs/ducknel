@@ -21,7 +21,7 @@ OBJS = $(OUT_DIR)/boot.o \
        $(OUT_DIR)/keyboard.o
 
 KERNEL = $(OUT_DIR)/kernel.elf
-ISO    = $(ISO_DIR)/kernel.iso
+ISO    = $(ISO_DIR)/ducknel.iso
 
 # Regla principal
 all: $(ISO)
@@ -50,6 +50,8 @@ $(ISO): $(KERNEL) | $(ISO_DIR)
 	echo ''                                     >> $(ISO_DIR)/iso/boot/grub/grub.cfg
 	echo 'menuentry "ducknel" {'                >> $(ISO_DIR)/iso/boot/grub/grub.cfg
 	echo '  multiboot2 /boot/kernel.elf'        >> $(ISO_DIR)/iso/boot/grub/grub.cfg
+	echo '  set gfxpayload=text'                >> $(ISO_DIR)/iso/boot/grub/grub.cfg
+	echo '  boot'                               >> $(ISO_DIR)/iso/boot/grub/grub.cfg
 	echo '}'                                    >> $(ISO_DIR)/iso/boot/grub/grub.cfg
 	grub-mkrescue -o $(ISO) $(ISO_DIR)/iso
 	rm -rf $(ISO_DIR)/iso

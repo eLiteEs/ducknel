@@ -1,35 +1,33 @@
 ENTRY(_start)
-OUTPUT_FORMAT("elf64-x86-64")
 
 SECTIONS
 {
-    . = 1M;
+    . = 0x100000; /* 1MB */
 
-    /* Multiboot2 header debe ir dentro de los primeros 8 KiB */
-    .multiboot2_header :
+    .text : ALIGN(4K)
     {
-        KEEP(*(.multiboot2_header))
+        *(.multiboot2_header)
+        *(.text)
     }
 
-    .text :
+    .rodata : ALIGN(4K)
     {
-        *(.text*)
+        *(.rodata)
     }
 
-    .rodata :
+    .data : ALIGN(4K)
     {
-        *(.rodata*)
+        *(.data)
     }
 
-    .data :
-    {
-        *(.data*)
-    }
-
-    .bss :
+    .bss : ALIGN(4K)
     {
         *(COMMON)
-        *(.bss*)
+        *(.bss)
+    }
+
+    /DISCARD/ : {
+        *(.comment)
+        *(.note.*)
     }
 }
-

@@ -1,131 +1,275 @@
 ; boot.asm
-; Multiboot2 header + salto a long mode (64-bit)
-; Ensamblar con: nasm -f elf64 boot.asm -o boot.o
-; Linkear junto con tus .o C++ normales.
-
-; -------------------------
-; Multiboot2 header (32-bit)
-; -------------------------
 [BITS 32]
 section .multiboot2_header
 align 8
-    dd 0xE85250D6              ; magic
-    dd 0                       ; architecture (0 = i386)
+    dd 0xE85250D6
+    dd 0
     dd header_end - header_start
     dd -(0xE85250D6 + 0 + (header_end - header_start))
-
 header_start:
-    ; End tag (type = 0, size = 8)
-    dw 0
+    dw 0    ; End tag
     dw 0
     dd 8
 header_end:
 
-; -------------------------
-; 32-bit bootstrap code
-; -------------------------
-[BITS 32]
+; -----------------------
+; Variables globales
+; -----------------------
+section .data
+align 4
+    mb2_ptr:       dd 0
+    vbe_lfb_addr:  dd 0
+    vbe_width:     dw 0
+    vbe_height:    dw 0
+    vbe_pitch:     dw 0
+    vbe_bpp:       db 0
+    padding:       db 0
+
+; Direcciones fijas
+vbe_info_buffer   equ 0x8000
+real_mode_stub    equ 0x7000
+return_point      equ 0x7800
+
+; -----------------------
+; Código 32-bit (inicio)
+; -----------------------
 section .text
 global _start
-extern kmain       ; tu función C++ debe declararse: extern "C" void kmain();
+extern kmain
 
 _start:
     cli
+    mov [mb2_ptr], ebx
 
-    ; --- cargar GDT ---
-    lgdt [gdt_descriptor]
+    ; Habilitar A20
+    in al, 0x92
+    or al, 2
+    out 0x92, al
 
-    ; (opcional) aseguramos A20 si no lo gestiona GRUB (normalmente GRUB ya lo hizo).
-    ; ; aquí omitimos A20 por simplicidad
+    ; Configurar stack temporal
+    mov esp, stack_top_32
 
-    ; --- cargar CR3 con PML4 base (bajo PAE el CR3 contiene 32-bit) ---
-    ; mov eax, pml4 (la dirección física es el offset de la etiqueta)
-    mov eax, pml4
-    mov cr3, eax
+    ; Configurar VBE nosotros mismos
+    call setup_vbe
 
-    ; --- habilitar PAE (CR4.PAE = bit 5) ---
+    ; Configurar GDT para 64-bit
+    lgdt [gdt64_descriptor]
+
+    ; Habilitar PAE
     mov eax, cr4
     or eax, (1 << 5)
     mov cr4, eax
 
-    ; --- habilitar LME a través de MSR IA32_EFER (0xC0000080) ---
+    ; Configurar tablas de paginación
+    mov eax, pml4
+    mov cr3, eax
+
+    ; Habilitar modo largo (LME)
     mov ecx, 0xC0000080
-    rdmsr                   ; EDX:EAX = MSR
-    or  eax, (1 << 8)       ; set LME bit
+    rdmsr
+    or eax, (1 << 8)
     wrmsr
 
-    ; --- habilitar paging (CR0.PG bit 31). PE (bit 0) should already estar seteado por GRUB. ---
+    ; Habilitar paginación
     mov eax, cr0
-    or  eax, 0x80000000     ; set PG
+    or eax, 0x80000000
     mov cr0, eax
 
-    ; Far jump a long mode (selector 0x08 -> segundo descriptor en GDT)
+    ; Saltar a modo de 64 bits
     jmp 0x08:long_mode_entry
 
-; -------------------------
-; 64-bit entry
-; -------------------------
-[BITS 64]
-long_mode_entry:
-    ; cargar selectores de datos (en long mode solo se usa base=0)
-    mov ax, 0x10
+; -----------------------
+; Configuración VBE
+; -----------------------
+setup_vbe:
+    pushad
+    
+    ; Copiar código de 16 bits a memoria baja
+    mov esi, real_mode_stub_start
+    mov edi, real_mode_stub
+    mov ecx, real_mode_stub_end - real_mode_stub_start
+    rep movsb
+
+    ; Copiar código de retorno
+    mov esi, return_code_start
+    mov edi, return_point
+    mov ecx, return_code_end - return_code_start
+    rep movsb
+
+    ; Saltar al código de 16 bits
+    jmp 0x0000:real_mode_stub
+
+; Punto de retorno desde el stub de 16 bits
+vbe_return:
+    popad
+    ret
+
+; -----------------------
+; Código de 16 bits (se copia a 0x7000)
+; -----------------------
+real_mode_stub_start:
+[BITS 16]
+    ; Configurar segmentos
+    xor ax, ax
     mov ds, ax
     mov es, ax
     mov ss, ax
+    mov sp, 0x7C00
+
+    ; Habilitar A20
+    in al, 0x92
+    or al, 2
+    out 0x92, al
+
+    ; Obtener información VBE
+    mov ax, 0x4F00
+    mov di, vbe_info_buffer
+    int 0x10
+    cmp ax, 0x004F
+    jne .vbe_error
+
+    ; Buscar modo 1024x768x32 (0x118)
+    mov ax, 0x4F01
+    mov cx, 0x118
+    mov di, vbe_info_buffer + 512
+    int 0x10
+    cmp ax, 0x004F
+    jne .vbe_error
+
+    ; Establecer modo de video con LFB
+    mov ax, 0x4F02
+    mov bx, 0x4118
+    int 0x10
+    cmp ax, 0x004F
+    jne .vbe_error
+
+    ; Guardar información VBE
+    mov eax, [es:vbe_info_buffer + 512 + 40]
+    mov [0x6000], eax
+    mov ax, [es:vbe_info_buffer + 512 + 18]
+    mov [0x6004], ax
+    mov ax, [es:vbe_info_buffer + 512 + 20]
+    mov [0x6006], ax
+    mov ax, [es:vbe_info_buffer + 512 + 16]
+    mov [0x6008], ax
+    mov al, [es:vbe_info_buffer + 512 + 25]
+    mov [0x600A], al
+
+.vbe_error:
+    ; Volver a modo protegido
+    cli
+    mov eax, cr0
+    or eax, 1
+    mov cr0, eax
+
+    ; Saltar al código de retorno (0x7800)
+    jmp 0x0000:return_point
+
+real_mode_stub_end:
+
+; -----------------------
+; Código de retorno (se copia a 0x7800)
+; -----------------------
+return_code_start:
+[BITS 32]
+    ; Configurar segmentos de datos
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
     mov fs, ax
     mov gs, ax
+    mov ss, ax
 
-    ; establecer stack (stack_top definido en .bss)
-    mov rsp, stack_top
+    ; Configurar stack
+    mov esp, stack_top_32
 
-    ; llamar a kmain (C/C++). Asegúrate: extern "C" void kmain();
+    ; Saltar de vuelta a la función setup_vbe
+    jmp vbe_return
+
+return_code_end:
+
+; -----------------------
+; Punto de entrada modo 64-bit
+; -----------------------
+[BITS 64]
+long_mode_entry:
+    cli
+    mov rsp, stack_top_64
+
+    ; Configurar segmentos
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+
+    ; Cargar información VBE desde memoria baja
+    xor rax, rax
+    mov eax, [0x6000]        ; LFB address
+    mov rdi, rax
+    movzx rsi, word [0x6004] ; Width
+    movzx rdx, word [0x6006] ; Height
+    movzx rcx, word [0x6008] ; Pitch
+    movzx r8, byte [0x600A]  ; BPP
+
+    ; Pasar puntero multiboot
+    mov r9, [mb2_ptr]
+
+    ; Llamar al kernel
+    extern kmain
     call kmain
 
-.hang64:
-    cli
+.hang:
     hlt
-    jmp .hang64
+    jmp .hang
 
-; -------------------------
-; GDT (64-bit compatible)
-; layout: null, code64, data64
-; -------------------------
+; -----------------------
+; GDT para modo 64-bit
+; -----------------------
 align 8
-gdt_start:
-    dq 0x0000000000000000                 ; null
-    dq 0x00AF9A000000FFFF                 ; code64: present, ring0, L=1, readable
-    dq 0x00AF92000000FFFF                 ; data: present, ring0, writable
-gdt_end:
+gdt64:
+    dq 0x0000000000000000    ; Null
+    dq 0x00AF9A000000FFFF    ; Code 64-bit
+    dq 0x00AF92000000FFFF    ; Data 64-bit
+gdt64_end:
 
-gdt_descriptor:
-    dw gdt_end - gdt_start - 1
-    dd gdt_start
+gdt64_descriptor:
+    dw gdt64_end - gdt64 - 1
+    dq gdt64
 
-; -------------------------
-; Paginación PAE / Long Mode
-; Identity map 0..2MiB using 2MiB page (one PD entry with PS=1)
-; We'll create:
-;   pml4 -> pdpt -> pd
-; Entry flags: present(1) + rw(2) = 3 for table entries
-; For PD 2MiB page entry: present(1) + rw(2) + ps(1<<7 = 0x80) => 0x83
-; -------------------------
+; -----------------------
+; Tablas de paginación
+; -----------------------
 align 4096
 pml4:
-    dq pdpt + 0x03        ; entry points to pdpt (present | rw)
+    dq pdpt + 0x03
+    times 511 dq 0
+
 align 4096
 pdpt:
-    dq pd  + 0x03         ; entry points to pd (present | rw)
+    dq pd + 0x03
+    times 511 dq 0
+
 align 4096
 pd:
-    ; Map first 2MiB with a 2MiB page: base = 0x00000000, flags = 0x83
-    dq 0x00000000 + 0x83
+    ; Mapear los primeros 2GB
+    %assign i 0
+    %rep 1024
+    dq (i * 0x200000) + 0x83
+    %assign i i+1
+    %endrep
 
-; -------------------------
-; Stack (en BSS)
-; -------------------------
+; -----------------------
+; Pilas
+; -----------------------
 section .bss
 align 16
-stack_bottom:
-    resb 16384
-stack_top:
+stack_bottom_32:
+    resb 8192
+stack_top_32:
 
+align 16
+stack_bottom_64:
+    resb 16384
+stack_top_64:
